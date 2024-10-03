@@ -7,23 +7,29 @@ from model import Linear_QNet, QTrainer
 from helper import plot
 
 MAX_MEMORY = 100_000
-BATCH_SIZE = 64
+BATCH_SIZE = 1000
 LR = 0.0005  # Giảm learning rate để quá trình học ổn định hơn
-average_score_window = 100
-no_improvement_count = 0
-max_no_improvement = 30  # Dừng nếu không có cải thiện trong 10 lần
 
 class Agent:
 
-    def __init__(self):
+    def __init__(self, model_path=None):
         self.n_games = 0
         self.epsilon = 0  # randomness
-        self.gamma = 0.5  # Tăng gamma để ưu tiên phần thưởng dài hạn
+        self.gamma = 0.95  # Tăng gamma để ưu tiên phần thưởng dài hạn
         self.memory = deque(maxlen=MAX_MEMORY)  # popleft()
-        self.model = Linear_QNet(11, 512, 3)  # No changes here; input, hidden, output sizes are the same
+        self.model = Linear_QNet(11, 512, 3)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
-        self.epsilon_min = 0.01  # Thêm giá trị epsilon tối thiểu
-        self.epsilon_decay = 0.995  # Thêm hệ số giảm epsilon
+        self.epsilon_min = 0.01  # Giá trị epsilon tối thiểu
+        self.epsilon_decay = 0.995  # Hệ số giảm epsilon
+        self.no_improvement_count = 0  # Số lần không cải thiện
+        self.max_no_improvement = 30 
+        
+        # Tải trọng số mô hình nếu có đường dẫn
+        if model_path:
+            self.load_model(model_path)
+
+    def load_model(self, model_path):
+        self.model.load(model_path)
 
     def get_state(self, game):
         head = game.snake[0]
@@ -65,7 +71,7 @@ class Agent:
             # Food location 
             game.food.x < game.head.x,  # food left
             game.food.x > game.head.x,  # food right
-            game.food.y < game.head.y,  # food up
+            game.food.y < game.head.x,  # food up
             game.food.y > game.head.y  # food down
             ]
 
@@ -97,24 +103,21 @@ class Agent:
             final_move[move] = 1
         else:
             state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model(state0)  # Pass the state through the model with the new layer
+            prediction = self.model(state0)
             move = torch.argmax(prediction).item()
             final_move[move] = 1
 
         return final_move
 
-average_score_window = 100
-no_improvement_count = 0
-max_no_improvement = 10
 
-def train():
+def train(model_path=None):
     plot_scores = []
     plot_mean_scores = []
     total_score = 0
     record = 0
-    agent = Agent()
+    average_score_window = 100
+    agent = Agent(model_path)  
     game = SnakeGameAI()
-
 
     while True:
         # get old state
@@ -132,7 +135,7 @@ def train():
         # Tăng reward nếu tiến gần đến thức ăn, giảm reward nếu di chuyển xa
         distance_old = abs(game.food.x - game.head.x) + abs(game.food.y - game.head.y)
         distance_new = abs(game.food.x - game.head.x) + abs(game.food.y - game.head.y)
-
+        
         if distance_new < distance_old:
             reward += 0.5  # Tiến gần thức ăn
         else:
@@ -166,13 +169,14 @@ def train():
             plot_mean_scores.append(mean_score)
             plot(plot_scores, plot_mean_scores)
 
+            # Kiểm tra xem điểm trung bình có cải thiện không
             if agent.n_games > average_score_window:
                 if mean_score <= record:
-                    no_improvement_count += 1
+                    agent.no_improvement_count += 1
                 else:
-                    no_improvement_count = 0
+                    agent.no_improvement_count = 0
 
-                if no_improvement_count >= max_no_improvement:
+                if agent.no_improvement_count >= agent.max_no_improvement:
                     print("Training stopped after", agent.n_games, "games without improvement.")
                     break
             
@@ -183,6 +187,5 @@ def train():
                 print("Training complete after", agent.n_games, "games.")
                 break
 
-
 if __name__ == '__main__':
-    train()
+    train(model_path='model\model_2.pth')

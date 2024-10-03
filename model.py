@@ -7,12 +7,18 @@ import os
 class Linear_QNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
+        # Hidden layers
         self.linear1 = nn.Linear(input_size, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, output_size)
+        self.linear2 = nn.Linear(hidden_size, hidden_size)
+        # Output layer
+        self.linear3 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
+        # Pass through hidden layers with ReLU activation
         x = F.relu(self.linear1(x))
-        x = self.linear2(x)
+        x = F.relu(self.linear2(x))
+        # Pass through the final output layer without activation for Q-values
+        x = self.linear3(x)
         return x
 
     def save(self, file_name='model.pth'):
@@ -25,7 +31,6 @@ class Linear_QNet(nn.Module):
 
     def load(self, file_name):
         self.load_state_dict(torch.load(file_name))
-
 
 class QTrainer:
     def __init__(self, model, lr, gamma):
@@ -40,10 +45,9 @@ class QTrainer:
         next_state = torch.tensor(next_state, dtype=torch.float)
         action = torch.tensor(action, dtype=torch.long)
         reward = torch.tensor(reward, dtype=torch.float)
-        # (n, x)
 
         if len(state.shape) == 1:
-            # (1, x)
+            # Expand the dimensions if necessary
             state = torch.unsqueeze(state, 0)
             next_state = torch.unsqueeze(next_state, 0)
             action = torch.unsqueeze(action, 0)
@@ -59,16 +63,13 @@ class QTrainer:
             if not done[idx]:
                 Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
 
-            target[idx][torch.argmax(action[idx]).item()] = Q_new
-    
-        # 2: Q_new = r + y * max(next_predicted Q value) -> only do this if not done
-        # pred.clone()
-        # preds[argmax(action)] = Q_new
+            # Use the action directly instead of argmax, since action is one-hot encoded
+            action_idx = torch.argmax(action[idx]).item()
+            target[idx][action_idx] = Q_new
+
+        # Perform backpropagation
         self.optimizer.zero_grad()
         loss = self.criterion(target, pred)
         loss.backward()
 
         self.optimizer.step()
-
-
-

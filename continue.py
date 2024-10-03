@@ -110,7 +110,7 @@ class Agent:
 
 average_score_window = 100
 no_improvement_count = 0
-max_no_improvement = 10  # Dừng nếu không có cải thiện trong 10 lần
+max_no_improvement = 30  # Dừng nếu không có cải thiện trong 10 lần
 
 
 def train(model_path=None):
@@ -130,6 +130,14 @@ def train(model_path=None):
         # perform move and get new state
         reward, done, score = game.play_step(final_move)
         state_new = agent.get_state(game)
+
+        # Điều chỉnh phần thưởng ưu tiên sinh tồn hơn
+        if done:
+            reward = -10  # Phạt nặng khi rắn chết
+        elif reward > 0:
+            reward = 10  # Phần thưởng nhỏ khi ăn táo
+        else:
+            reward = 0.5  # Phần thưởng khi sống sót qua lượt di chuyển
 
         # Train short memory
         agent.train_short_memory(state_old, final_move, reward, state_new, done)
@@ -155,7 +163,7 @@ def train(model_path=None):
             plot_mean_scores.append(mean_score)
             plot(plot_scores, plot_mean_scores)
 
-            # dừng nếu điểm không cải thiện 
+            # Dừng nếu không có cải thiện điểm
             if agent.n_games > average_score_window:
                 if mean_score <= record:
                     no_improvement_count += 1
@@ -168,13 +176,12 @@ def train(model_path=None):
             
             plot(plot_scores, plot_mean_scores)
 
-            # dừng dựa trên số lượt trò chơi
+            # Dừng dựa trên số lượt trò chơi
             if agent.n_games >= 500:
                 print("Training complete after", agent.n_games, "games.")
                 break
-                
 
 
 if __name__ == '__main__':
     # Đường dẫn đến mô hình đã huấn luyện trước đó để tiếp tục huấn luyện
-    train(model_path='model\model_2.pth')
+    train(model_path='model\model_3.pth')
